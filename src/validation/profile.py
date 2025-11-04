@@ -3,9 +3,11 @@
 from datetime import date
 from io import BytesIO
 
-# Імпорти для валідації на рівні маршруту
 from fastapi import HTTPException, status, UploadFile
 from PIL import Image
+
+# Виправлено імпорт: видалено 'src.'
+from database.models.accounts import GenderEnum
 
 # --- Функції для валідації моделі Pydantic (викликають ValueError) ---
 
@@ -26,6 +28,16 @@ def validate_birth_date(date_of_birth: date) -> date:
     if date_of_birth > today:
         raise ValueError("Date of birth cannot be in the future.")
     return date_of_birth
+
+def validate_gender(gender_value: str) -> str:
+    """
+    НОВА ФУНКЦІЯ: Валідує стать. Має бути дійсним значенням GenderEnum.
+    """
+    valid_genders = {item.value for item in GenderEnum}
+    if gender_value.lower() not in valid_genders:
+        raise ValueError(f"Invalid gender. Must be one of {', '.join(valid_genders)}.")
+    return gender_value.lower()
+
 
 # --- Функції для валідації на рівні маршруту (викликають HTTPException) ---
 
@@ -49,10 +61,9 @@ async def validate_image(file: UploadFile) -> UploadFile:
     max_size_mb = 1
     max_size_bytes = max_size_mb * 1024 * 1024
     
-    # Використовуємо seek/tell для перевірки розміру без повного зчитування в пам'ять
     file.file.seek(0, 2)
     file_size = file.file.tell()
-    await file.seek(0) # Повертаємо покажчик на початок для подальшого читання
+    await file.seek(0)
 
     if file_size > max_size_bytes:
         raise HTTPException(
@@ -60,11 +71,10 @@ async def validate_image(file: UploadFile) -> UploadFile:
             detail=f"Image size exceeds {max_size_mb}MB."
         )
 
-    # Перевірка, чи це справжнє зображення
     try:
         file_content = await file.read()
         Image.open(BytesIO(file_content)).verify()
-        await file.seek(0) # Знову скидаємо покажчик
+        await file.seek(0)
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
